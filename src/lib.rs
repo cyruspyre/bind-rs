@@ -30,28 +30,45 @@ impl Bind {
     }
 
     pub fn push_front(&mut self, str: &str) {
-        self.head = Box::into_raw(Box::new(Node {
-            idx: 0,
-            str: str.to_string(),
-            next: self.head,
-        }));
+        let head = unsafe { &mut *self.head };
+
+        // 15 does magic!
+        if head.str.len() <= str.len() * 15 {
+            head.str.insert_str(0, str);
+        } else {
+            self.head = Box::into_raw(Box::new(Node {
+                idx: 0,
+                str: str.to_string(),
+                next: self.head,
+            }));
+            unsafe { (*self.last).idx += str.len() }
+        }
         self.len += str.len();
-        unsafe { (*self.last).idx += str.len() }
     }
 
-    pub fn push_at(&mut self, i: usize, str: &str) {
+    pub fn push_at(&mut self, idx: usize, str: &str) {
+        if idx == self.len {
+            return self.push(str);
+        }
+
+        if idx == 0 {
+            return self.push_front(str);
+        }
+
+        assert!(idx < self.len);
+
         let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-        let node = if head.has(i) {
+        let node = if head.has(idx) {
             head
-        } else if last.has(i) {
+        } else if last.has(idx) {
             last
         } else {
-            let mut cur = match cur.is_null() {
-                true => head,
-                _ => unsafe { &mut *cur },
+            let mut cur = match unsafe { cur.as_mut() } {
+                Some(v) if v.idx < idx => v,
+                _ => head,
             };
 
-            while !cur.has(i) {
+            while !cur.has(idx) {
                 if cur.next.is_null() {
                     break;
                 }
@@ -64,8 +81,8 @@ impl Bind {
             cur
         };
 
-        if node.idx + node.str.len() != i {
-            let (a, b) = node.str.split_at(i - node.idx);
+        if node.idx + node.str.len() != idx {
+            let (a, b) = node.str.split_at(idx - node.idx);
             let tmp = Box::into_raw(Box::new(Node {
                 idx: node.idx + a.len() + str.len(),
                 str: b.to_string(),
@@ -79,6 +96,10 @@ impl Bind {
         node.str += str;
         self.cur = node;
         self.len += str.len();
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 
