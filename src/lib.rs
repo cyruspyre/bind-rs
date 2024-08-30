@@ -47,7 +47,7 @@ impl Bind {
         self.len += str.len();
     }
 
-    pub fn insert_at(&mut self, idx: usize, str: &str) {
+    pub fn insert(&mut self, idx: usize, str: &str) {
         if idx == self.len {
             return self.push(str);
         }
