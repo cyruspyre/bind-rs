@@ -5,6 +5,7 @@ use std::{
 
 #[derive(Debug)]
 pub struct Bind {
+    idx: usize,
     len: usize,
     cur: *mut Node,
     head: *mut Node,
@@ -18,6 +19,7 @@ impl Bind {
 
         Self {
             len,
+            idx: 0,
             cur: null_mut(),
             head: tmp,
             last: tmp,
@@ -32,21 +34,20 @@ impl Bind {
     pub fn push_front(&mut self, str: &str) {
         let head = unsafe { &mut *self.head };
 
-        // 15 does magic!
+        // I'm not sure if this will cause issues in the future.
         if head.str.len() <= str.len() * 15 {
             head.str.insert_str(0, str);
         } else {
             self.head = Box::into_raw(Box::new(Node {
-                idx: 0,
                 str: str.to_string(),
                 next: self.head,
             }));
-            unsafe { (*self.last).idx += str.len() }
         }
+
         self.len += str.len();
     }
 
-    pub fn push_at(&mut self, idx: usize, str: &str) {
+    pub fn insert_at(&mut self, idx: usize, str: &str) {
         if idx == self.len {
             return self.push(str);
         }
@@ -58,41 +59,56 @@ impl Bind {
         assert!(idx < self.len);
 
         let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-        let node = if head.has(idx) {
+        let node = if head.has(0, idx) {
+            self.idx = 0;
             head
-        } else if last.has(idx) {
+        } else if last.has(self.len - last.str.len(), idx) {
+            self.idx = self.len - last.str.len();
             last
         } else {
             let mut cur = match unsafe { cur.as_mut() } {
-                Some(v) if v.idx < idx => v,
-                _ => head,
+                Some(v) if self.idx < idx => v,
+                _ => {
+                    self.idx = 0;
+                    head
+                }
             };
 
-            while !cur.has(idx) {
+            while !cur.has(self.idx, idx) {
                 if cur.next.is_null() {
                     break;
                 }
 
                 let tmp = unsafe { &mut *cur.next };
-                tmp.idx = cur.idx + cur.str.len();
+                self.idx += cur.str.len();
                 cur = tmp
             }
 
             cur
         };
+        
+        // I'm not sure if this will cause issues in the future.
+        if node.str.len() <= str.len() * 15 {
+            self.cur = node;
+            self.len += str.len();
+            return node.str.insert_str(idx - self.idx, str);
+        }
 
-        if node.idx + node.str.len() != idx {
-            let (a, b) = node.str.split_at(idx - node.idx);
+        if self.idx + node.str.len() != idx {
+            let (a, b) = node.str.split_at(idx - self.idx);
             let tmp = Box::into_raw(Box::new(Node {
-                idx: node.idx + a.len() + str.len(),
                 str: b.to_string(),
                 next: node.next,
             }));
 
+            if self.idx + node.str.len() == self.len {
+                self.last = tmp;
+            }
+
             node.str = a.to_string();
             node.next = tmp;
         }
-
+        
         node.str += str;
         self.cur = node;
         self.len += str.len();
@@ -124,7 +140,6 @@ impl Display for Bind {
 
 #[derive(Debug)]
 struct Node {
-    idx: usize,
     str: String,
     next: *mut Node,
 }
@@ -133,12 +148,11 @@ impl Node {
     fn new(str: String) -> Self {
         Self {
             str,
-            idx: 0,
             next: null_mut(),
         }
     }
 
-    fn has(&self, i: usize) -> bool {
-        self.idx <= i && i <= self.idx + self.str.len()
+    fn has(&self, start: usize, idx: usize) -> bool {
+        start <= idx && idx <= start + self.str.len()
     }
 }
