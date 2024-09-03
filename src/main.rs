@@ -4,7 +4,7 @@ fn main() {
     let mut bind = Bind::new("HelloWorld".into());
 
     bind.push("!");
-    bind.push_front("> ");
+    bind.push_front("✨ ");
     bind.insert(3, " ");
     bind.insert(5, " ");
     bind.insert(7, " ");
@@ -15,6 +15,8 @@ fn main() {
     bind.insert(17, " ");
     bind.insert(19, " ");
     bind.insert(21, " ");
+    bind.insert(11, " 💀 ");
 
     println!("{:?}\n{bind}", bind);
 }
+

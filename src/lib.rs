@@ -47,7 +47,7 @@ impl Bind {
         self.len += str.len();
     }
 
-    pub fn insert(&mut self, idx: usize, str: &str) {
+    pub fn insert(&mut self, mut idx: usize, str: &str) {
         if idx == self.len {
             return self.push(str);
         }
@@ -59,10 +59,10 @@ impl Bind {
         assert!(idx < self.len);
 
         let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-        let node = if head.has(0, idx) {
+        let node = if head.has(0, &mut idx) {
             self.idx = 0;
             head
-        } else if last.has(self.len - last.str.len(), idx) {
+        } else if last.has(self.len - last.str.len(), &mut idx) {
             self.idx = self.len - last.str.len();
             last
         } else {
@@ -74,7 +74,7 @@ impl Bind {
                 }
             };
 
-            while !cur.has(self.idx, idx) {
+            while !cur.has(self.idx, &mut idx) {
                 if cur.next.is_null() {
                     break;
                 }
@@ -86,7 +86,7 @@ impl Bind {
 
             cur
         };
-        
+
         // I'm not sure if this will cause issues in the future.
         if node.str.len() <= str.len() * 15 {
             self.cur = node;
@@ -108,7 +108,7 @@ impl Bind {
             node.str = a.to_string();
             node.next = tmp;
         }
-        
+
         node.str += str;
         self.cur = node;
         self.len += str.len();
@@ -152,7 +152,16 @@ impl Node {
         }
     }
 
-    fn has(&self, start: usize, idx: usize) -> bool {
-        start <= idx && idx <= start + self.str.len()
+    fn has(&self, start: usize, idx: &mut usize) -> bool {
+        self.str
+            .chars()
+            .filter_map(|c| match c.is_ascii() {
+                true => None,
+                _ => Some(c.len_utf8() - 1),
+            })
+            .for_each(|i| *idx += i);
+
+        start <= *idx && *idx <= start + self.str.len()
     }
 }
+
