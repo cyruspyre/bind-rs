@@ -60,11 +60,22 @@ impl Bind {
 
         assert!(idx < self.len);
 
+        macro_rules! has {
+            ($node:expr, $start:expr) => {{
+                #[cfg(feature = "unicode")]
+                let a = $node.has($start, idx - self.idx, &mut idx);
+                #[cfg(not(feature = "unicode"))]
+                let a = $node.has($start, &mut idx);
+
+                a
+            }};
+        }
+
         let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-        let node = if head.has(0, idx - self.idx, &mut idx) {
+        let node = if has!(head, 0) {
             self.idx = 0;
             head
-        } else if last.has(self.len - last.str.len(), idx - self.idx, &mut idx) {
+        } else if has!(last, self.len - last.str.len()) {
             self.idx = self.len - last.str.len();
             last
         } else {
@@ -76,7 +87,7 @@ impl Bind {
                 }
             };
 
-            while !cur.has(self.idx, idx - self.idx, &mut idx) {
+            while !has!(cur, self.idx) {
                 if cur.next.is_null() {
                     break;
                 }
@@ -154,20 +165,18 @@ impl Node {
         }
     }
 
-    fn has(&self, start: usize, ldx: usize, idx: &mut usize) -> bool {
+    fn has(&self, start: usize, #[cfg(feature = "unicode")] ldx: usize, idx: &mut usize) -> bool {
         #[cfg(feature = "unicode")]
-        {
-            for (i, c) in self.str.char_indices() {
-                if i >= ldx {
-                    break;
-                }
-
-                if c.is_ascii() {
-                    continue;
-                }
-
-                *idx += c.len_utf8() - 1
+        for (i, c) in self.str.char_indices() {
+            if i >= ldx {
+                break;
             }
+
+            if c.is_ascii() {
+                continue;
+            }
+
+            *idx += c.len_utf8() - 1
         }
 
         start <= *idx && *idx <= start + self.str.len()
