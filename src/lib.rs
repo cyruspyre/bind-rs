@@ -12,6 +12,8 @@ pub struct Bind {
     last: *mut Node,
 }
 
+const THRESHOLD: usize = if cfg!(feature = "unicode") { 15 } else { 3000 };
+
 impl Bind {
     pub fn new(str: String) -> Self {
         let len = str.len();
@@ -88,7 +90,7 @@ impl Bind {
         };
 
         // I'm not sure if this will cause issues in the future.
-        if node.str.len() <= str.len() * 15 {
+        if node.str.len() - idx - self.idx <= THRESHOLD {
             self.cur = node;
             self.len += str.len();
             return node.str.insert_str(idx - self.idx, str);
@@ -153,15 +155,17 @@ impl Node {
     }
 
     fn has(&self, start: usize, idx: &mut usize) -> bool {
-        self.str
-            .chars()
-            .filter_map(|c| match c.is_ascii() {
-                true => None,
-                _ => Some(c.len_utf8() - 1),
-            })
-            .for_each(|i| *idx += i);
+        #[cfg(feature = "unicode")]
+        {
+            for c in self.str.chars() {
+                if c.is_ascii() {
+                    continue;
+                }
+
+                *idx += c.len_utf8() - 1
+            }
+        }
 
         start <= *idx && *idx <= start + self.str.len()
     }
 }
-
