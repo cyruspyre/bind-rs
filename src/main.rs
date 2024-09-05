@@ -25,6 +25,7 @@ fn main() {
             _ => " |",
         },
     );
+    bind.insert(11, ".");
 
     println!("{:?}\n{bind}", bind);
 }

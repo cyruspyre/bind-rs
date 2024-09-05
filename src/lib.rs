@@ -61,10 +61,10 @@ impl Bind {
         assert!(idx < self.len);
 
         let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-        let node = if head.has(0, &mut idx) {
+        let node = if head.has(0, idx - self.idx, &mut idx) {
             self.idx = 0;
             head
-        } else if last.has(self.len - last.str.len(), &mut idx) {
+        } else if last.has(self.len - last.str.len(), idx - self.idx, &mut idx) {
             self.idx = self.len - last.str.len();
             last
         } else {
@@ -76,7 +76,7 @@ impl Bind {
                 }
             };
 
-            while !cur.has(self.idx, &mut idx) {
+            while !cur.has(self.idx, idx - self.idx, &mut idx) {
                 if cur.next.is_null() {
                     break;
                 }
@@ -154,10 +154,14 @@ impl Node {
         }
     }
 
-    fn has(&self, start: usize, idx: &mut usize) -> bool {
+    fn has(&self, start: usize, ldx: usize, idx: &mut usize) -> bool {
         #[cfg(feature = "unicode")]
         {
-            for c in self.str.chars() {
+            for (i, c) in self.str.char_indices() {
+                if i >= ldx {
+                    break;
+                }
+
                 if c.is_ascii() {
                     continue;
                 }
