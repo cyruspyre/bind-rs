@@ -28,4 +28,10 @@ fn main() {
     bind.insert(11, ".");
 
     println!("{:?}\n{bind}", bind);
+
+    let bind = Bind::new("Line 1\nLine 2\nLine 3\n\n".into());
+
+    for s in bind.lines() {
+        println!("{:?}", s);
+    }
 }

@@ -1,7 +1,11 @@
+pub mod line;
+
 use std::{
     fmt::{Display, Formatter, Result},
-    ptr::null_mut,
+    ptr::{null, null_mut},
 };
+
+use line::Lines;
 
 #[derive(Debug)]
 pub struct Bind {
@@ -129,6 +133,14 @@ impl Bind {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn lines(&self) -> Lines<'_> {
+        Lines {
+            bind: self,
+            cur: null(),
+            idx: 0,
+        }
     }
 }
 
