@@ -1,7 +1,14 @@
 [package]
 name = "bind-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+authors = ["Cyrus Pyre"]
+description = "An experimental data structure for text manipulation"
+readme = "README.md"
+repository = "https://github.com/cyruspyre/bind-rs"
+license = "MIT"
+keywords = ["string", "text", "bind", "manipulation", "edit"]
+categories = ["data-structures", "text-processing"]
 
 [features]
 unicode = []

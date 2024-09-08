@@ -2,7 +2,7 @@ use bind_rs::Bind;
 
 #[test]
 fn insert() {
-    let mut bind = Bind::new("HelloWorld".into());
+    let mut bind = Bind::from("HelloWorld");
 
     bind.push("!");
     bind.push_front("✨ ");
@@ -24,7 +24,7 @@ fn insert() {
 
 #[test]
 fn lines() {
-    let bind = Bind::new("Line 1️⃣\nLine 2️⃣\nLine 3️⃣\n\n".into());
+    let bind = Bind::from("Line 1️⃣\nLine 2️⃣\nLine 3️⃣\n\n");
     let mut lines = bind.lines();
 
     assert_eq!(lines.next().unwrap(), "Line 1️⃣");

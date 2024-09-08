@@ -16,15 +16,14 @@ pub struct Bind {
     last: *mut Node,
 }
 
-const THRESHOLD: usize = if cfg!(feature = "unicode") { 15 } else { 3000 };
+const THRESHOLD: usize = if cfg!(feature = "unicode") { 900 } else { 3000 };
 
 impl Bind {
-    pub fn new(str: String) -> Self {
-        let len = str.len();
-        let tmp = Box::into_raw(Box::new(Node::new(str)));
+    pub fn new() -> Self {
+        let tmp = Box::into_raw(Box::new(Node::new(String::new())));
 
         Self {
-            len,
+            len: 0,
             idx: 0,
             cur: null_mut(),
             head: tmp,
@@ -140,6 +139,21 @@ impl Bind {
             bind: self,
             cur: null(),
             idx: 0,
+        }
+    }
+}
+
+impl<'a> From<&'a str> for Bind {
+    fn from(str: &'a str) -> Self {
+        let len = str.len();
+        let tmp = Box::into_raw(Box::new(Node::new(str.into())));
+
+        Self {
+            len,
+            idx: 0,
+            cur: null_mut(),
+            head: tmp,
+            last: tmp,
         }
     }
 }
