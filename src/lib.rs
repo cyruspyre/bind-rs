@@ -66,7 +66,11 @@ impl Bind {
         macro_rules! has {
             ($node:expr, $start:expr) => {{
                 #[cfg(feature = "unicode")]
-                let a = $node.has($start, idx - self.idx, &mut idx);
+                let a = if idx < self.idx {
+                    false
+                } else {
+                    $node.has($start, idx - self.idx, &mut idx)
+                };
                 #[cfg(not(feature = "unicode"))]
                 let a = $node.has($start, &mut idx);
 
