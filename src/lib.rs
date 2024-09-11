@@ -2,6 +2,7 @@ pub mod line;
 
 use std::{
     fmt::{Display, Formatter, Result},
+    ops::{Bound, RangeBounds},
     ptr::{null, null_mut},
 };
 
@@ -63,51 +64,9 @@ impl Bind {
 
         assert!(idx < self.len);
 
-        macro_rules! has {
-            ($node:expr, $start:expr) => {{
-                #[cfg(feature = "unicode")]
-                let a = if idx < self.idx {
-                    false
-                } else {
-                    $node.has($start, idx - self.idx, &mut idx)
-                };
-                #[cfg(not(feature = "unicode"))]
-                let a = $node.has($start, &mut idx);
+        let node = self.get_node(&mut idx);
 
-                a
-            }};
-        }
-
-        let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-        let node = if has!(head, 0) {
-            self.idx = 0;
-            head
-        } else if has!(last, self.len - last.str.len()) {
-            self.idx = self.len - last.str.len();
-            last
-        } else {
-            let mut cur = match unsafe { cur.as_mut() } {
-                Some(v) if self.idx < idx => v,
-                _ => {
-                    self.idx = 0;
-                    head
-                }
-            };
-
-            while !has!(cur, self.idx) {
-                if cur.next.is_null() {
-                    break;
-                }
-
-                let tmp = unsafe { &mut *cur.next };
-                self.idx += cur.str.len();
-                cur = tmp
-            }
-
-            cur
-        };
-
-        // I'm not sure if this will cause issues in the future.
+        // // I'm not sure if this will cause issues in the future.
         if node.str.len() - idx - self.idx <= THRESHOLD {
             self.cur = node;
             self.len += str.len();
@@ -134,6 +93,48 @@ impl Bind {
         self.len += str.len();
     }
 
+    pub fn slice<R: RangeBounds<usize>>(&mut self, rng: R) -> String {
+        let mut start = match rng.start_bound() {
+            Bound::Included(n) => *n,
+            _ => 0,
+        };
+        let end = match rng.end_bound() {
+            Bound::Included(n) => n + 1,
+            Bound::Excluded(n) => *n,
+            _ => self.len,
+        };
+
+        assert!(start <= end);
+
+        let mut len = end - start;
+
+        if len == 0 {
+            return String::new();
+        }
+
+        let mut node = self.get_node(&mut start);
+        let mut buf = String::new();
+
+        'main: while len != 0 {
+            for c in node.str[start..].chars() {
+                buf.push(c);
+                len -= 1;
+
+                if len == 0 {
+                    break 'main;
+                }
+            }
+
+            node = match unsafe { node.next.as_mut() } {
+                Some(v) => v,
+                _ => break,
+            };
+            start = 0;
+        }
+
+        buf
+    }
+
     pub fn len(&self) -> usize {
         self.len
     }
@@ -143,6 +144,53 @@ impl Bind {
             bind: self,
             cur: null(),
             idx: 0,
+        }
+    }
+
+    fn get_node<'a>(&mut self, idx: &mut usize) -> &'a mut Node {
+        macro_rules! has {
+            ($node:expr, $start:expr) => {{
+                #[cfg(feature = "unicode")]
+                let a = if *idx < self.idx {
+                    false
+                } else {
+                    $node.has($start, *idx - self.idx, idx)
+                };
+                #[cfg(not(feature = "unicode"))]
+                let a = $node.has($start, idx);
+
+                a
+            }};
+        }
+
+        let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
+
+        if has!(head, 0) {
+            self.idx = 0;
+            head
+        } else if has!(last, self.len - last.str.len()) {
+            self.idx = self.len - last.str.len();
+            last
+        } else {
+            let mut cur = match unsafe { cur.as_mut() } {
+                Some(v) if self.idx < *idx => v,
+                _ => {
+                    self.idx = 0;
+                    head
+                }
+            };
+
+            while !has!(cur, self.idx) {
+                if cur.next.is_null() {
+                    break;
+                }
+
+                let tmp = unsafe { &mut *cur.next };
+                self.idx += cur.str.len();
+                cur = tmp
+            }
+
+            cur
         }
     }
 }
@@ -195,7 +243,12 @@ impl Node {
         }
     }
 
-    fn has(&self, start: usize, #[cfg(feature = "unicode")] ldx: usize, idx: &mut usize) -> bool {
+    fn has(
+        &self,
+        start: usize,
+        #[cfg(feature = "unicode")] mut ldx: usize,
+        idx: &mut usize,
+    ) -> bool {
         #[cfg(feature = "unicode")]
         for (i, c) in self.str.char_indices() {
             if i >= ldx {
@@ -206,7 +259,8 @@ impl Node {
                 continue;
             }
 
-            *idx += c.len_utf8() - 1
+            *idx += c.len_utf8() - 1;
+            ldx += c.len_utf8() - 1;
         }
 
         start <= *idx && *idx <= start + self.str.len()

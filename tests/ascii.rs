@@ -33,3 +33,14 @@ fn lines() {
     assert_eq!(lines.next().unwrap(), "");
     assert_eq!(lines.next(), None);
 }
+
+#[test]
+fn slice() {
+    let mut bind = Bind::from("| Hello | World |");
+
+    assert_eq!(bind.slice(2..7), "Hello");
+    assert_eq!(bind.slice(2..=6), "Hello");
+
+    assert_eq!(bind.slice(10..15), "World");
+    assert_eq!(bind.slice(10..=14), "World");
+}
