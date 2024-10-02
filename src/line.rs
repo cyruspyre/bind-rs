@@ -20,7 +20,7 @@ impl<'a> Iterator for Lines<'a> {
         let mut str = String::new();
         let vec = unsafe { str.as_mut_vec() };
         let node = unsafe { &*self.cur };
-        let bytes = node.str.as_bytes();
+        let bytes = node.data.as_bytes();
 
         for i in self.idx..bytes.len() {
             let b = bytes[i];

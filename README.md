@@ -4,10 +4,10 @@
 
 ## Features
 
-- **Flexible String Manipulation**: Easily insert at an arbitrary position with zero to no performance hit
+- **Flexible String Manipulation**: Easily insert at an arbitrary position without fearing character boundary
 - **Unicode Support**: Optional support for Unicode characters
-- **Minimal Memory Overhead**: About 3.5% additional memory usage
-- **Performance**: Unicode support introduces a slight performance overhead (around 10%). For better performance, consider enabling Link Time Optimization (LTO).
+- **Minimal Memory Overhead**: Very minimal memory usage due to certain methods
+- **Performance**: Even with unicode support, it has little to no performance hit. For better performace, consider enabling LTO
 
 ## Usage
 

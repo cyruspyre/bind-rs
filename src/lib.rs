@@ -10,86 +10,67 @@ use line::Lines;
 
 #[derive(Debug)]
 pub struct Bind {
-    idx: usize,
     len: usize,
+    idx: Index,
     cur: *mut Node,
     head: *mut Node,
     last: *mut Node,
+    is_last: bool,
 }
-
-const THRESHOLD: usize = if cfg!(feature = "unicode") { 900 } else { 3000 };
 
 impl Bind {
     pub fn new() -> Self {
-        let tmp = Box::into_raw(Box::new(Node::new(String::new())));
-
-        Self {
-            len: 0,
-            idx: 0,
-            cur: null_mut(),
-            head: tmp,
-            last: tmp,
-        }
+        Self::build(String::new(), null_mut())
     }
 
     pub fn push(&mut self, str: &str) {
         self.len += str.len();
-        unsafe { (*self.last).str += str }
+        unsafe { (*self.last).data += str }
     }
 
     pub fn push_front(&mut self, str: &str) {
         let head = unsafe { &mut *self.head };
 
         // I'm not sure if this will cause issues in the future.
-        if head.str.len() <= str.len() * 15 {
-            head.str.insert_str(0, str);
+        if head.data.len() <= 500 {
+            head.data.insert_str(0, str);
         } else {
-            self.head = Box::into_raw(Box::new(Node {
-                str: str.to_string(),
-                next: self.head,
-            }));
+            self.head = Node::new(str.to_string(), self.head);
+            self.cur = self.head;
         }
 
         self.len += str.len();
     }
 
-    pub fn insert(&mut self, mut idx: usize, str: &str) {
-        if idx == self.len {
+    pub fn insert(&mut self, pos: usize, str: &str) {
+        if pos == self.len {
             return self.push(str);
         }
 
-        if idx == 0 {
+        if pos == 0 {
             return self.push_front(str);
         }
 
-        assert!(idx < self.len);
+        assert!(pos < self.len);
 
-        let node = self.get_node(&mut idx);
+        let node = self.get_node(pos);
 
         // // I'm not sure if this will cause issues in the future.
-        if node.str.len() - idx - self.idx <= THRESHOLD {
+        if node.data.len() <= 200 {
             self.cur = node;
             self.len += str.len();
-            return node.str.insert_str(idx - self.idx, str);
+            return node.data.insert_str(self.idx.local, str);
         }
 
-        if self.idx + node.str.len() != idx {
-            let (a, b) = node.str.split_at(idx - self.idx);
-            let tmp = Box::into_raw(Box::new(Node {
-                str: b.to_string(),
-                next: node.next,
-            }));
+        let data = node.data.split_off(self.idx.local);
 
-            if self.idx + node.str.len() == self.len {
-                self.last = tmp;
-            }
+        node.data += str;
+        node.next = Node::new(data, node.next);
 
-            node.str = a.to_string();
-            node.next = tmp;
+        if self.is_last {
+            self.last = node.next;
         }
 
-        node.str += str;
-        self.cur = node;
         self.len += str.len();
     }
 
@@ -112,11 +93,13 @@ impl Bind {
             return String::new();
         }
 
-        let mut node = self.get_node(&mut start);
+        let mut node = self.get_node(start);
         let mut buf = String::new();
 
+        start = self.idx.local;
+
         'main: while len != 0 {
-            for c in node.str[start..].chars() {
+            for c in node.data[start..].chars() {
                 buf.push(c);
                 len -= 1;
 
@@ -147,66 +130,72 @@ impl Bind {
         }
     }
 
-    fn get_node<'a>(&mut self, idx: &mut usize) -> &'a mut Node {
-        macro_rules! has {
-            ($node:expr, $start:expr) => {{
-                #[cfg(feature = "unicode")]
-                let a = if *idx < self.idx {
-                    false
-                } else {
-                    $node.has($start, *idx - self.idx, idx)
-                };
-                #[cfg(not(feature = "unicode"))]
-                let a = $node.has($start, idx);
+    fn get_node<'a>(&mut self, pos: usize) -> &'a mut Node {
+        let cur = unsafe { &mut *self.cur };
 
-                a
-            }};
-        }
+        self.is_last = false;
 
-        let (head, last, cur) = unsafe { (&mut *self.head, &mut *self.last, self.cur) };
-
-        if has!(head, 0) {
-            self.idx = 0;
-            head
-        } else if has!(last, self.len - last.str.len()) {
-            self.idx = self.len - last.str.len();
-            last
+        if cur.has(&mut self.idx, pos) {
+            self.is_last = self.head == self.last;
+            cur
         } else {
-            let mut cur = match unsafe { cur.as_mut() } {
-                Some(v) if self.idx < *idx => v,
-                _ => {
-                    self.idx = 0;
-                    head
-                }
+            let last = unsafe { &mut *self.last };
+            let tmp = self.len - last.data.len();
+            let mut idx = Index {
+                cur: tmp,
+                node: tmp,
+                stamp: tmp,
+                local: 0,
             };
 
-            while !has!(cur, self.idx) {
-                if cur.next.is_null() {
+            if last.has(&mut idx, pos) {
+                self.idx = idx;
+                self.cur = last;
+                self.is_last = true;
+
+                return last;
+            }
+
+            let mut node = if pos >= self.idx.cur {
+                cur
+            } else {
+                self.idx = Index::default();
+                unsafe { &mut *self.head }
+            };
+
+            while !node.has(&mut self.idx, pos) {
+                if node.next.is_null() {
                     break;
                 }
 
-                let tmp = unsafe { &mut *cur.next };
-                self.idx += cur.str.len();
-                cur = tmp
+                self.idx.node = self.idx.cur;
+                node = unsafe { &mut *node.next };
             }
 
-            cur
+            self.cur = node;
+
+            node
+        }
+    }
+
+    fn build(data: String, next: *mut Node) -> Self {
+        let len = data.len();
+        let tmp = Node::new(data, next);
+
+        Self {
+            len,
+            idx: Index::default(),
+            cur: tmp,
+            head: tmp,
+            last: tmp,
+            is_last: false,
         }
     }
 }
 
 impl<'a> From<&'a str> for Bind {
-    fn from(str: &'a str) -> Self {
-        let len = str.len();
-        let tmp = Box::into_raw(Box::new(Node::new(str.into())));
-
-        Self {
-            len,
-            idx: 0,
-            cur: null_mut(),
-            head: tmp,
-            last: tmp,
-        }
+    fn from(value: &'a str) -> Self {
+        Self::build(value.into(), null_mut())
     }
 }
 
@@ -216,7 +205,7 @@ impl Display for Bind {
         let mut tmp = unsafe { &*self.head };
 
         loop {
-            buf += &tmp.str;
+            buf += &tmp.data;
 
             if tmp.next.is_null() {
                 break;
@@ -230,39 +219,68 @@ impl Display for Bind {
 }
 
 #[derive(Debug)]
+struct Index {
+    cur: usize,
+    node: usize,
+    stamp: usize,
+    local: usize,
+}
+
+impl Default for Index {
+    fn default() -> Self {
+        Self {
+            cur: 0,
+            node: 0,
+            stamp: 0,
+            local: 0,
+        }
+    }
+}
+
+#[derive(Debug)]
 struct Node {
-    str: String,
+    data: String,
     next: *mut Node,
 }
 
 impl Node {
-    fn new(str: String) -> Self {
-        Self {
-            str,
-            next: null_mut(),
-        }
+    fn new(data: String, next: *mut Node) -> *mut Node {
+        Box::into_raw(Box::new(Node { data, next }))
     }
 
-    fn has(
-        &self,
-        start: usize,
-        #[cfg(feature = "unicode")] mut ldx: usize,
-        idx: &mut usize,
-    ) -> bool {
-        #[cfg(feature = "unicode")]
-        for (i, c) in self.str.char_indices() {
-            if i >= ldx {
-                break;
-            }
-
-            if c.is_ascii() {
-                continue;
-            }
-
-            *idx += c.len_utf8() - 1;
-            ldx += c.len_utf8() - 1;
+    fn has(&self, idx: &mut Index, pos: usize) -> bool {
+        if idx.node != idx.stamp {
+            idx.local = 0;
         }
 
-        start <= *idx && *idx <= start + self.str.len()
+        #[cfg(feature = "unicode")]
+        if pos > idx.cur {
+            for c in unsafe { self.data.get_unchecked(idx.local..).chars() } {
+                if idx.cur == pos {
+                    break;
+                }
+
+                idx.cur += 1;
+                idx.local += c.len_utf8();
+            }
+        }
+
+        #[cfg(not(feature = "unicode"))]
+        {
+            if idx.cur > pos {
+                return false;
+            }
+
+            idx.cur += self.data.len() - idx.local;
+
+            if idx.cur > pos {
+                idx.cur -= idx.cur - pos;
+            }
+
+            idx.local = idx.cur - idx.node;
+        }
+
+        idx.stamp = idx.node;
+        idx.cur == pos
     }
 }
